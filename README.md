@@ -11,35 +11,31 @@ Warehouse scanning app for finding SKU numbers printed on product labels at Lowe
 
 The app captures camera frames ~2.5x per second and runs them through Apple's Vision text recognition framework (via `react-native-text-recognition`). Matching is substring-based and case-insensitive, so partial SKU entries work fine.
 
-## Setup
+## Setup — Test on a real iPhone (free, no Apple Developer account)
 
-This app requires an **Expo Development Build** (not Expo Go) because it uses native OCR via Apple's Vision framework.
-
-### Prerequisites
-- Node.js 18+
-- Expo CLI: `npm install -g expo-cli eas-cli`
-- Expo account (free at expo.dev)
-- Apple Developer account for device builds
-
-### Install dependencies
+You need a Mac with Xcode installed. Run the setup script, plug in the phone, and you're done.
 
 ```bash
-npm install
+git clone https://github.com/ImChuckFinley/sku-finder
+cd sku-finder
+chmod +x setup-mac.sh && ./setup-mac.sh
 ```
 
-### Run on a connected iPhone (development build)
+When the script finishes:
 
 ```bash
-# First time: create the dev build (takes ~5 min via EAS cloud)
-eas build --platform ios --profile development
-
-# Install the .ipa on your phone, then:
-npx expo start --dev-client
+# Plug iPhone into Mac via USB, then:
+npx expo run:ios --device
 ```
 
-### Build a shareable preview IPA
+The app builds and installs in ~5 minutes. Tap **Trust** on the phone if prompted.
+
+> **Note:** Without a paid Apple Developer account ($99/yr) the app expires after 7 days and you'll need to reinstall. For a proof-of-concept that's fine.
+
+### Production build (when ready to ship)
 
 ```bash
+npm install -g eas-cli
 eas build --platform ios --profile preview
 ```
 
