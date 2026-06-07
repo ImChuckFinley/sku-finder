@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useState } from 'react';
 import {
   Keyboard,
+  Modal,
   SafeAreaView,
   StyleSheet,
   TouchableWithoutFeedback,
@@ -50,14 +51,21 @@ export default function App() {
           />
         </View>
 
-        {/* Freeze frame + highlight overlay when found */}
-        {state.foundImage && (
-          <FoundScreen
-            foundImage={state.foundImage}
-            targetSku={targetSku}
-            onScanAgain={scanAgain}
-          />
-        )}
+        {/* Full-screen modal so FoundScreen covers EVERYTHING including the input bar */}
+        <Modal
+          visible={state.foundImage !== null}
+          animationType="fade"
+          statusBarTranslucent
+          transparent={false}
+        >
+          {state.foundImage && (
+            <FoundScreen
+              foundImage={state.foundImage}
+              targetSku={targetSku}
+              onScanAgain={scanAgain}
+            />
+          )}
+        </Modal>
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
@@ -70,7 +78,6 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     flex: 1,
-    position: 'relative',
     overflow: 'hidden',
   },
 });

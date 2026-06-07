@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   Image,
+  LayoutChangeEvent,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,101 +16,104 @@ interface Props {
   onScanAgain: () => void;
 }
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
 export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
-    // Fade in
     Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
+      toValue: 1, duration: 200, useNativeDriver: true,
     }).start();
 
-    // Pulse the highlight box
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.06, duration: 500, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.08, duration: 500, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1,    duration: 500, useNativeDriver: true }),
       ])
     ).start();
-  }, [fadeAnim, pulseAnim]);
+  }, []);
 
-  // Calculate highlight box position scaled to display
-  const highlightBox = (() => {
-    if (!foundImage.matchBox) return null;
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setContainerSize({ width, height });
+  };
+
+  // Scale bounding box from photo coords → display coords
+  const highlightBox = useMemo(() => {
+    if (!foundImage.matchBox || !containerSize) return null;
 
     const { matchBox: b, imageWidth, imageHeight } = foundImage;
+    const { width: cW, height: cH } = containerSize;
 
-    // The image is displayed with contain — calculate actual rendered size
+    // resizeMode="contain": fit image inside container preserving aspect ratio
     const imgAspect = imageWidth / imageHeight;
-    const screenAspect = SCREEN_W / SCREEN_H;
+    const cntAspect = cW / cH;
 
     let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
 
-    if (imgAspect > screenAspect) {
-      renderedW = SCREEN_W;
-      renderedH = SCREEN_W / imgAspect;
+    if (imgAspect > cntAspect) {
+      renderedW = cW;
+      renderedH = cW / imgAspect;
       offsetX = 0;
-      offsetY = (SCREEN_H - renderedH) / 2;
+      offsetY = (cH - renderedH) / 2;
     } else {
-      renderedH = SCREEN_H;
-      renderedW = SCREEN_H * imgAspect;
+      renderedH = cH;
+      renderedW = cH * imgAspect;
+      offsetX = (cW - renderedW) / 2;
       offsetY = 0;
-      offsetX = (SCREEN_W - renderedW) / 2;
     }
 
-    const scaleX = renderedW / imageWidth;
-    const scaleY = renderedH / imageHeight;
+    const sX = renderedW / imageWidth;
+    const sY = renderedH / imageHeight;
 
     return {
-      top:    offsetY + b.top    * scaleY - 8,
-      left:   offsetX + b.left   * scaleX - 8,
-      width:  b.width  * scaleX + 16,
-      height: b.height * scaleY + 16,
+      top:    offsetY + b.top    * sY - 10,
+      left:   offsetX + b.left   * sX - 10,
+      width:  b.width  * sX + 20,
+      height: b.height * sY + 20,
     };
-  })();
+  }, [foundImage, containerSize]);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Frozen frame */}
-      <Image
-        source={{ uri: foundImage.uri }}
-        style={styles.image}
-        resizeMode="contain"
-      />
+      {/* Full-screen frozen frame */}
+      <View style={styles.imageContainer} onLayout={onLayout}>
+        <Image
+          source={{ uri: foundImage.uri }}
+          style={styles.image}
+          resizeMode="contain"
+        />
 
-      {/* Green border overlay */}
+        {/* Yellow highlight around matched text */}
+        {highlightBox && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.highlight,
+              {
+                top:    highlightBox.top,
+                left:   highlightBox.left,
+                width:  highlightBox.width,
+                height: highlightBox.height,
+                transform: [{ scale: pulseAnim }],
+              },
+            ]}
+          />
+        )}
+      </View>
+
+      {/* Green border over everything */}
       <View style={styles.greenBorder} pointerEvents="none" />
 
-      {/* Highlight box around matched text */}
-      {highlightBox && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.highlight,
-            {
-              top:    highlightBox.top,
-              left:   highlightBox.left,
-              width:  highlightBox.width,
-              height: highlightBox.height,
-              transform: [{ scale: pulseAnim }],
-            },
-          ]}
-        />
-      )}
-
       {/* FOUND badge */}
-      <View style={styles.badge} pointerEvents="none">
+      <View style={styles.badge}>
         <Text style={styles.badgeCheck}>✓</Text>
         <Text style={styles.badgeFound}>FOUND</Text>
         <Text style={styles.badgeSku}>{targetSku}</Text>
       </View>
 
-      {/* Scan Again button */}
+      {/* Scan Again */}
       <TouchableOpacity style={styles.button} onPress={onScanAgain} activeOpacity={0.85}>
         <Text style={styles.buttonText}>SCAN AGAIN</Text>
       </TouchableOpacity>
@@ -120,12 +123,15 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: '#000',
   },
+  imageContainer: {
+    flex: 1,
+  },
   image: {
-    width: SCREEN_W,
-    height: SCREEN_H,
+    width: '100%',
+    height: '100%',
   },
   greenBorder: {
     ...StyleSheet.absoluteFillObject,
@@ -137,16 +143,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 3,
     borderColor: '#FFD600',
-    backgroundColor: 'rgba(255, 214, 0, 0.25)',
+    backgroundColor: 'rgba(255, 214, 0, 0.3)',
     borderRadius: 4,
     zIndex: 3,
   },
   badge: {
     position: 'absolute',
-    bottom: 160,
+    bottom: 140,
     alignSelf: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     borderRadius: 16,
     paddingHorizontal: 32,
     paddingVertical: 16,
@@ -176,7 +182,7 @@ const styles = StyleSheet.create({
   },
   button: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 50,
     alignSelf: 'center',
     backgroundColor: '#4caf50',
     paddingHorizontal: 40,

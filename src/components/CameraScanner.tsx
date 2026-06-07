@@ -29,9 +29,8 @@ export function CameraScanner({ isScanning, onScanResult }: Props) {
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.5,
+        quality: 0.4,
         base64: false,
-        skipProcessing: true,
         shutterSound: false,
       } as any);
 
