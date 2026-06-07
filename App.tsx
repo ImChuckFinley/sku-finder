@@ -1,27 +1,34 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useRef, useState } from 'react';
-import { Animated, Keyboard, SafeAreaView, StyleSheet, TouchableWithoutFeedback, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  Keyboard,
+  SafeAreaView,
+  StyleSheet,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 import { CameraScanner } from './src/components/CameraScanner';
-import { FlashOverlay } from './src/components/FlashOverlay';
+import { FoundScreen } from './src/components/FoundScreen';
 import { SKUInput } from './src/components/SKUInput';
 import { useSkuScanner } from './src/hooks/useSkuScanner';
 
 export default function App() {
   const [targetSku, setTargetSku] = useState('');
-  const [isScanning, setIsScanning] = useState(false);
-  const flashAnim = useRef(new Animated.Value(0)).current;
-
-  const { state, processOcrResult } = useSkuScanner(targetSku, flashAnim);
+  const { state, processScanResult, startScanning, stopScanning, scanAgain } = useSkuScanner(targetSku);
 
   const handleToggleScan = useCallback(() => {
     Keyboard.dismiss();
-    setIsScanning(prev => !prev);
-  }, []);
+    if (state.isScanning) {
+      stopScanning();
+    } else {
+      startScanning();
+    }
+  }, [state.isScanning, startScanning, stopScanning]);
 
   const handleSkuChange = useCallback((text: string) => {
     setTargetSku(text);
-    if (isScanning) setIsScanning(false);
-  }, [isScanning]);
+    stopScanning();
+  }, [stopScanning]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -31,18 +38,26 @@ export default function App() {
         <SKUInput
           value={targetSku}
           onChange={handleSkuChange}
-          isScanning={isScanning}
+          isScanning={state.isScanning}
           onToggleScan={handleToggleScan}
           scanCount={state.scanCount}
         />
 
         <View style={styles.cameraContainer}>
           <CameraScanner
-            isScanning={isScanning}
-            onTextRecognized={processOcrResult}
+            isScanning={state.isScanning}
+            onScanResult={processScanResult}
           />
-          <FlashOverlay flashAnim={flashAnim} targetSku={targetSku} />
         </View>
+
+        {/* Freeze frame + highlight overlay when found */}
+        {state.foundImage && (
+          <FoundScreen
+            foundImage={state.foundImage}
+            targetSku={targetSku}
+            onScanAgain={scanAgain}
+          />
+        )}
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
