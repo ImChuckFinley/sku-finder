@@ -161,6 +161,17 @@ export function CameraScanner({ isScanning, targetSku, onScanResult, onDeepScanC
         </View>
       )}
 
+      {/* Manual scan trigger — force an immediate OCR pass */}
+      {isScanning && (
+        <TouchableOpacity
+          style={styles.manualScanBtn}
+          onPress={runScan}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.manualScanIcon}>⚡</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Zoom controls */}
       <View style={styles.zoomBar} pointerEvents="box-none">
         {ZOOM_LEVELS.map(level => {
@@ -264,5 +275,23 @@ const styles = StyleSheet.create({
   },
   zoomTextActive: {
     color: '#fff',
+  },
+
+  // Manual scan trigger button
+  manualScanBtn: {
+    position: 'absolute',
+    bottom: 86,
+    alignSelf: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderWidth: 1.5,
+    borderColor: '#4caf50',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  manualScanIcon: {
+    fontSize: 22,
   },
 });

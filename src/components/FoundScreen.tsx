@@ -16,16 +16,39 @@ interface Props {
   onScanAgain: () => void;
 }
 
+type Corner = 'tl' | 'tr' | 'bl' | 'br';
+
+/** Find the screen quadrant with the fewest highlight box centers */
+function bestCorner(
+  boxes: Array<{ left: number; top: number; width: number; height: number }>,
+  cW: number,
+  cH: number,
+): Corner {
+  const counts: Record<Corner, number> = { tl: 0, tr: 0, bl: 0, br: 0 };
+  for (const b of boxes) {
+    const cx = b.left + b.width  / 2;
+    const cy = b.top  + b.height / 2;
+    const col = cx < cW / 2 ? 'l' : 'r';
+    const row = cy < cH / 2 ? 't' : 'b';
+    counts[`${row}${col}` as Corner]++;
+  }
+  return (Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0]) as Corner;
+}
+
+const CORNER_STYLE: Record<Corner, object> = {
+  tl: { top: 52, left: 12 },
+  tr: { top: 52, right: 12 },
+  bl: { bottom: 28, left: 12 },
+  br: { bottom: 28, right: 12 },
+};
+
 export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
   const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1, duration: 200, useNativeDriver: true,
-    }).start();
-
+    Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.08, duration: 500, useNativeDriver: true }),
@@ -39,33 +62,20 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
     setContainerSize({ width, height });
   };
 
-  // Scale all bounding boxes from photo coords → display coords
   const highlightBoxes = useMemo(() => {
     if (!containerSize || foundImage.matchBoxes.length === 0) return [];
-
     const { matchBoxes, imageWidth, imageHeight } = foundImage;
     const { width: cW, height: cH } = containerSize;
-
     const imgAspect = imageWidth / imageHeight;
     const cntAspect = cW / cH;
-
     let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
-
     if (imgAspect > cntAspect) {
-      renderedW = cW;
-      renderedH = cW / imgAspect;
-      offsetX = 0;
-      offsetY = (cH - renderedH) / 2;
+      renderedW = cW; renderedH = cW / imgAspect; offsetX = 0; offsetY = (cH - renderedH) / 2;
     } else {
-      renderedH = cH;
-      renderedW = cH * imgAspect;
-      offsetX = (cW - renderedW) / 2;
-      offsetY = 0;
+      renderedH = cH; renderedW = cH * imgAspect; offsetX = (cW - renderedW) / 2; offsetY = 0;
     }
-
     const sX = renderedW / imageWidth;
     const sY = renderedH / imageHeight;
-
     return matchBoxes.map(b => ({
       top:    offsetY + b.frame.top    * sY - 10,
       left:   offsetX + b.frame.left   * sX - 10,
@@ -75,17 +85,21 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
     }));
   }, [foundImage, containerSize]);
 
+  // Pick corner with fewest highlight boxes
+  const corner: Corner = containerSize && highlightBoxes.length > 0
+    ? bestCorner(highlightBoxes, containerSize.width, containerSize.height)
+    : 'bl';
+
+  const exact = foundImage.matchBoxes.filter(b => b.type === 'exact').length;
+  const near  = foundImage.matchBoxes.filter(b => b.type === 'near').length;
+  const total = foundImage.matchBoxes.length;
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Full-screen frozen frame */}
+      {/* Frozen frame */}
       <View style={styles.imageContainer} onLayout={onLayout}>
-        <Image
-          source={{ uri: foundImage.uri }}
-          style={styles.image}
-          resizeMode="contain"
-        />
+        <Image source={{ uri: foundImage.uri }} style={styles.image} resizeMode="contain" />
 
-        {/* Green = exact match, Gold = near match (one digit off/obscured) */}
         {highlightBoxes.map((box, i) => (
           <Animated.View
             key={i}
@@ -94,10 +108,8 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
               styles.highlight,
               box.type === 'exact' ? styles.highlightExact : styles.highlightNear,
               {
-                top:    box.top,
-                left:   box.left,
-                width:  box.width,
-                height: box.height,
+                top: box.top, left: box.left,
+                width: box.width, height: box.height,
                 transform: [{ scale: pulseAnim }],
               },
             ]}
@@ -105,54 +117,42 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
         ))}
       </View>
 
-      {/* Green border over everything */}
+      {/* Green border */}
       <View style={styles.greenBorder} pointerEvents="none" />
 
-      {/* FOUND badge */}
-      <View style={styles.badge}>
-        <Text style={styles.badgeCheck}>✓</Text>
-        <Text style={styles.badgeFound}>
-          {foundImage.matchBoxes.length > 1
-            ? `FOUND  ×${foundImage.matchBoxes.length}`
-            : 'FOUND'}
-        </Text>
-        <Text style={styles.badgeSku}>{targetSku}</Text>
-        {foundImage.matchBoxes.length > 1 && (() => {
-          const exact = foundImage.matchBoxes.filter(b => b.type === 'exact').length;
-          const near  = foundImage.matchBoxes.filter(b => b.type === 'near').length;
-          return (
-            <Text style={styles.badgeHint}>
-              {exact > 0 ? `${exact} confirmed` : ''}
-              {exact > 0 && near > 0 ? '  ·  ' : ''}
-              {near  > 0 ? `${near} possible` : ''}
+      {/* Compact badge — positioned in emptiest corner */}
+      <View style={[styles.badge, CORNER_STYLE[corner]]}>
+        <View style={styles.badgeRow}>
+          <Text style={styles.badgeCheck}>✓</Text>
+          <View>
+            <Text style={styles.badgeFound}>
+              {total > 1 ? `FOUND ×${total}` : 'FOUND'}
             </Text>
-          );
-        })()}
+            <Text style={styles.badgeSku}>{targetSku}</Text>
+            {total > 1 && (
+              <Text style={styles.badgeHint}>
+                {exact > 0 ? `${exact} confirmed` : ''}
+                {exact > 0 && near > 0 ? ' · ' : ''}
+                {near  > 0 ? `${near} possible` : ''}
+              </Text>
+            )}
+          </View>
+        </View>
+        <TouchableOpacity style={styles.scanAgainBtn} onPress={onScanAgain} activeOpacity={0.8}>
+          <Text style={styles.scanAgainText}>SCAN AGAIN</Text>
+        </TouchableOpacity>
       </View>
-
-      {/* Scan Again */}
-      <TouchableOpacity style={styles.button} onPress={onScanAgain} activeOpacity={0.85}>
-        <Text style={styles.buttonText}>SCAN AGAIN</Text>
-      </TouchableOpacity>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  imageContainer: {
-    flex: 1,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
+  imageContainer: { flex: 1 },
+  image: { width: '100%', height: '100%' },
   greenBorder: {
     ...StyleSheet.absoluteFillObject,
-    borderWidth: 8,
+    borderWidth: 6,
     borderColor: '#4caf50',
     zIndex: 2,
   },
@@ -170,59 +170,58 @@ const styles = StyleSheet.create({
     borderColor: '#FFD600',
     backgroundColor: 'rgba(255, 214, 0, 0.25)',
   },
+
+  // Compact badge
   badge: {
     position: 'absolute',
-    bottom: 140,
-    alignSelf: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 16,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderWidth: 2,
+    backgroundColor: 'rgba(0,0,0,0.82)',
+    borderRadius: 12,
+    borderWidth: 1.5,
     borderColor: '#4caf50',
+    padding: 10,
     zIndex: 4,
+    minWidth: 160,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   badgeCheck: {
     color: '#4caf50',
-    fontSize: 48,
+    fontSize: 28,
     fontWeight: '900',
-    lineHeight: 52,
+    lineHeight: 32,
   },
   badgeFound: {
     color: '#fff',
-    fontSize: 32,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 6,
+    letterSpacing: 2,
   },
   badgeSku: {
     color: '#FFD600',
-    fontSize: 22,
+    fontSize: 13,
     fontWeight: '700',
     fontFamily: 'Courier',
-    letterSpacing: 4,
-    marginTop: 4,
+    letterSpacing: 2,
   },
   badgeHint: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
-    marginTop: 6,
-    letterSpacing: 0.5,
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 10,
+    marginTop: 2,
   },
-  button: {
-    position: 'absolute',
-    bottom: 50,
-    alignSelf: 'center',
+  scanAgainBtn: {
+    marginTop: 8,
     backgroundColor: '#4caf50',
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 40,
-    zIndex: 4,
+    borderRadius: 6,
+    paddingVertical: 7,
+    alignItems: 'center',
   },
-  buttonText: {
+  scanAgainText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: 3,
+    letterSpacing: 2,
   },
 });
