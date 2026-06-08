@@ -12,13 +12,13 @@ import {
   useCameraDevice,
   useCameraPermission,
 } from 'react-native-vision-camera';
-import { BoundingBox, ScanResult } from '../hooks/useSkuScanner';
+import { BoundingBox, MatchBox, MatchType, ScanResult, nearMatch } from '../hooks/useSkuScanner';
 
 interface Props {
   isScanning: boolean;
   targetSku: string;
   onScanResult: (result: ScanResult) => boolean;
-  onDeepScanComplete: (boxes: BoundingBox[], uri: string, w: number, h: number) => void;
+  onDeepScanComplete: (boxes: MatchBox[], uri: string, w: number, h: number) => void;
 }
 
 const SCAN_INTERVAL_MS = 230;
@@ -78,9 +78,12 @@ export function CameraScanner({ isScanning, targetSku, onScanResult, onDeepScanC
                 const snap = await cameraRef.current.takeSnapshot({ quality: 70, skipMetadata: true });
                 const snapUri = snap.path.startsWith('file://') ? snap.path : `file://${snap.path}`;
                 const result = await TextRecognition.recognize(snapUri);
-                const boxes = result.blocks
-                  .filter(b => b.text.toUpperCase().replace(/\s+/g, '').includes(target))
-                  .map(b => b.frame);
+                const boxes: MatchBox[] = result.blocks.flatMap(b => {
+                  const t = b.text.toUpperCase().replace(/\s+/g, '');
+                  if (t.includes(target))      return [{ frame: b.frame, type: 'exact' as MatchType }];
+                  if (nearMatch(b.text, target)) return [{ frame: b.frame, type: 'near'  as MatchType }];
+                  return [];
+                });
                 if (boxes.length) {
                   onDeepScanComplete(boxes, snapUri, snap.width ?? 1080, snap.height ?? 1920);
                 }

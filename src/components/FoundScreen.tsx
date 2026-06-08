@@ -67,10 +67,11 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
     const sY = renderedH / imageHeight;
 
     return matchBoxes.map(b => ({
-      top:    offsetY + b.top    * sY - 10,
-      left:   offsetX + b.left   * sX - 10,
-      width:  b.width  * sX + 20,
-      height: b.height * sY + 20,
+      top:    offsetY + b.frame.top    * sY - 10,
+      left:   offsetX + b.frame.left   * sX - 10,
+      width:  b.frame.width  * sX + 20,
+      height: b.frame.height * sY + 20,
+      type:   b.type,
     }));
   }, [foundImage, containerSize]);
 
@@ -84,13 +85,14 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
           resizeMode="contain"
         />
 
-        {/* Yellow highlight around every instance of the SKU */}
+        {/* Green = exact match, Gold = near match (one digit off/obscured) */}
         {highlightBoxes.map((box, i) => (
           <Animated.View
             key={i}
             pointerEvents="none"
             style={[
               styles.highlight,
+              box.type === 'exact' ? styles.highlightExact : styles.highlightNear,
               {
                 top:    box.top,
                 left:   box.left,
@@ -115,11 +117,17 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
             : 'FOUND'}
         </Text>
         <Text style={styles.badgeSku}>{targetSku}</Text>
-        {foundImage.matchBoxes.length > 1 && (
-          <Text style={styles.badgeHint}>
-            {foundImage.matchBoxes.length} boxes visible in frame
-          </Text>
-        )}
+        {foundImage.matchBoxes.length > 1 && (() => {
+          const exact = foundImage.matchBoxes.filter(b => b.type === 'exact').length;
+          const near  = foundImage.matchBoxes.filter(b => b.type === 'near').length;
+          return (
+            <Text style={styles.badgeHint}>
+              {exact > 0 ? `${exact} confirmed` : ''}
+              {exact > 0 && near > 0 ? '  ·  ' : ''}
+              {near  > 0 ? `${near} possible` : ''}
+            </Text>
+          );
+        })()}
       </View>
 
       {/* Scan Again */}
@@ -151,10 +159,16 @@ const styles = StyleSheet.create({
   highlight: {
     position: 'absolute',
     borderWidth: 3,
-    borderColor: '#FFD600',
-    backgroundColor: 'rgba(255, 214, 0, 0.3)',
     borderRadius: 4,
     zIndex: 3,
+  },
+  highlightExact: {
+    borderColor: '#4caf50',
+    backgroundColor: 'rgba(76, 175, 80, 0.25)',
+  },
+  highlightNear: {
+    borderColor: '#FFD600',
+    backgroundColor: 'rgba(255, 214, 0, 0.25)',
   },
   badge: {
     position: 'absolute',

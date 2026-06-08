@@ -8,9 +8,16 @@ export interface BoundingBox {
   height: number;
 }
 
+export type MatchType = 'exact' | 'near';
+
+export interface MatchBox {
+  frame: BoundingBox;
+  type: MatchType;
+}
+
 export interface FoundImage {
   uri: string;
-  matchBoxes: BoundingBox[];
+  matchBoxes: MatchBox[];
   imageWidth: number;
   imageHeight: number;
 }
@@ -33,23 +40,20 @@ export interface ScanState {
   foundImage: FoundImage | null;
 }
 
-/**
- * Primary match: exact — used during live scanning.
- */
+/** Exact match — all digits present */
 function exactMatch(blockText: string, target: string): boolean {
   return blockText.toUpperCase().replace(/\s+/g, '').includes(target);
 }
 
 /**
- * Deep scan match: loose — used AFTER freeze to find every instance.
- * Accepts any block containing a substring of the target that is at
- * least 70% of its length (min 6 digits). Catches one-digit OCR errors
- * on boxes that were already confirmed to be in-frame.
+ * Near match — contains N-1 consecutive digits of the target.
+ * Catches labels where one digit is obscured, cut off, or misread.
  */
-export function looseMatch(blockText: string, target: string): boolean {
+export function nearMatch(blockText: string, target: string): boolean {
+  if (exactMatch(blockText, target)) return false; // already exact
   const normalized = blockText.toUpperCase().replace(/\s+/g, '');
-  if (normalized.includes(target)) return true;
-  const minLen = Math.max(6, Math.floor(target.length * 0.7));
+  const minLen = target.length - 1;
+  if (minLen < 5) return false;
   for (let i = 0; i <= target.length - minLen; i++) {
     if (normalized.includes(target.substring(i, i + minLen))) return true;
   }
@@ -84,7 +88,7 @@ export function useSkuScanner(targetSku: string) {
    * Skips any new box that significantly overlaps one we already have.
    */
   const updateFoundBoxes = useCallback((
-    newBoxes: BoundingBox[],
+    newBoxes: MatchBox[],
     uri?: string,
     imageWidth?: number,
     imageHeight?: number,
@@ -93,17 +97,24 @@ export function useSkuScanner(targetSku: string) {
       if (!prev.foundImage) return prev;
       const existing = prev.foundImage.matchBoxes;
       const merged = [...existing];
+
       for (const nb of newBoxes) {
-        const nbCX = nb.left + nb.width  / 2;
-        const nbCY = nb.top  + nb.height / 2;
-        const isDupe = merged.some(eb => {
-          const ebCX = eb.left + eb.width  / 2;
-          const ebCY = eb.top  + eb.height / 2;
-          const dist = Math.sqrt(Math.pow(nbCX - ebCX, 2) + Math.pow(nbCY - ebCY, 2));
-          return dist < 100; // within 100px = same sticker
+        const nbCX = nb.frame.left + nb.frame.width  / 2;
+        const nbCY = nb.frame.top  + nb.frame.height / 2;
+        const dupeIdx = merged.findIndex(eb => {
+          const ebCX = eb.frame.left + eb.frame.width  / 2;
+          const ebCY = eb.frame.top  + eb.frame.height / 2;
+          return Math.sqrt(Math.pow(nbCX - ebCX, 2) + Math.pow(nbCY - ebCY, 2)) < 100;
         });
-        if (!isDupe) merged.push(nb);
+
+        if (dupeIdx === -1) {
+          merged.push(nb);
+        } else if (nb.type === 'exact' && merged[dupeIdx].type === 'near') {
+          // Upgrade a near match to exact if we now have confirmation
+          merged[dupeIdx] = nb;
+        }
       }
+
       return {
         ...prev,
         foundImage: {
@@ -128,8 +139,9 @@ export function useSkuScanner(targetSku: string) {
       if (!normalizedText.includes(target)) return false;
 
       // Primary match: exact only
-      const matchingBlocks = blocks.filter(b => exactMatch(b.text, target));
-      const matchBoxes = matchingBlocks.map(b => b.frame);
+      const matchBoxes: MatchBox[] = blocks
+        .filter(b => exactMatch(b.text, target))
+        .map(b => ({ frame: b.frame, type: 'exact' as MatchType }));
 
       triggerMatch({ uri, matchBoxes, imageWidth, imageHeight });
       return true;
