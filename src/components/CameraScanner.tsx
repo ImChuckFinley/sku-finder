@@ -21,7 +21,7 @@ interface Props {
   onDeepScanComplete: (boxes: MatchBox[], uri: string, w: number, h: number) => void;
 }
 
-const SCAN_INTERVAL_MS = 230;
+const SCAN_INTERVAL_MS = 150;
 const ZOOM_LEVELS = [1, 2, 3, 5];
 
 export function CameraScanner({ isScanning, targetSku, onScanResult, onDeepScanComplete }: Props) {

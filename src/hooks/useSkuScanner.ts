@@ -98,13 +98,17 @@ export function useSkuScanner(targetSku: string) {
       const existing = prev.foundImage.matchBoxes;
       const merged = [...existing];
 
+      // 15% of image width — scales with snapshot resolution automatically
+      const imgW = imageWidth ?? prev.foundImage.imageWidth;
+      const dupeThreshold = imgW * 0.15;
+
       for (const nb of newBoxes) {
         const nbCX = nb.frame.left + nb.frame.width  / 2;
         const nbCY = nb.frame.top  + nb.frame.height / 2;
         const dupeIdx = merged.findIndex(eb => {
           const ebCX = eb.frame.left + eb.frame.width  / 2;
           const ebCY = eb.frame.top  + eb.frame.height / 2;
-          return Math.sqrt(Math.pow(nbCX - ebCX, 2) + Math.pow(nbCY - ebCY, 2)) < 100;
+          return Math.sqrt(Math.pow(nbCX - ebCX, 2) + Math.pow(nbCY - ebCY, 2)) < dupeThreshold;
         });
 
         if (dupeIdx === -1) {
