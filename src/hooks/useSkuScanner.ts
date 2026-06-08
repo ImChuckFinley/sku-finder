@@ -10,7 +10,7 @@ export interface BoundingBox {
 
 export interface FoundImage {
   uri: string;
-  matchBoxes: BoundingBox[];   // every instance of the SKU visible in the frame
+  matchBoxes: BoundingBox[];
   imageWidth: number;
   imageHeight: number;
 }
@@ -33,6 +33,29 @@ export interface ScanState {
   foundImage: FoundImage | null;
 }
 
+/**
+ * Primary match: exact — used during live scanning.
+ */
+function exactMatch(blockText: string, target: string): boolean {
+  return blockText.toUpperCase().replace(/\s+/g, '').includes(target);
+}
+
+/**
+ * Deep scan match: loose — used AFTER freeze to find every instance.
+ * Accepts any block containing a substring of the target that is at
+ * least 70% of its length (min 6 digits). Catches one-digit OCR errors
+ * on boxes that were already confirmed to be in-frame.
+ */
+export function looseMatch(blockText: string, target: string): boolean {
+  const normalized = blockText.toUpperCase().replace(/\s+/g, '');
+  if (normalized.includes(target)) return true;
+  const minLen = Math.max(6, Math.floor(target.length * 0.7));
+  for (let i = 0; i <= target.length - minLen; i++) {
+    if (normalized.includes(target.substring(i, i + minLen))) return true;
+  }
+  return false;
+}
+
 export function useSkuScanner(targetSku: string) {
   const [state, setState] = useState<ScanState>({
     isScanning: false,
@@ -47,18 +70,47 @@ export function useSkuScanner(targetSku: string) {
     if (now - lastMatchTime.current < 2000) return;
     lastMatchTime.current = now;
 
-    // Triple heavy haptic burst
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 120);
     setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 240);
     setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 400);
 
-    // Stop scanning and freeze the frame
-    setState(prev => ({
-      ...prev,
-      isScanning: false,
-      foundImage: image,
-    }));
+    setState(prev => ({ ...prev, isScanning: false, foundImage: image }));
+  }, []);
+
+  /**
+   * Called by CameraScanner's deep scan pass after the freeze.
+   * MERGES new boxes with existing ones — never removes a box already shown.
+   * Skips any new box that significantly overlaps one we already have.
+   */
+  const updateFoundBoxes = useCallback((
+    newBoxes: BoundingBox[],
+    uri?: string,
+    imageWidth?: number,
+    imageHeight?: number,
+  ) => {
+    setState(prev => {
+      if (!prev.foundImage) return prev;
+      const existing = prev.foundImage.matchBoxes;
+      const merged = [...existing];
+      for (const nb of newBoxes) {
+        const overlaps = merged.some(eb => {
+          const xOverlap = nb.left < eb.left + eb.width  && nb.left + nb.width  > eb.left;
+          const yOverlap = nb.top  < eb.top  + eb.height && nb.top  + nb.height > eb.top;
+          return xOverlap && yOverlap;
+        });
+        if (!overlaps) merged.push(nb);
+      }
+      return {
+        ...prev,
+        foundImage: {
+          uri:         uri         ?? prev.foundImage.uri,
+          matchBoxes:  merged,
+          imageWidth:  imageWidth  ?? prev.foundImage.imageWidth,
+          imageHeight: imageHeight ?? prev.foundImage.imageHeight,
+        },
+      };
+    });
   }, []);
 
   const processScanResult = useCallback(
@@ -69,24 +121,14 @@ export function useSkuScanner(targetSku: string) {
 
       setState(prev => ({ ...prev, scanCount: prev.scanCount + 1 }));
 
-      // Check if any block contains our SKU
       const normalizedText = text.toUpperCase().replace(/\s+/g, '');
       if (!normalizedText.includes(target)) return false;
 
-      // Block-level matching — blocks aggregate full label text reliably
-      const matchingBlocks = blocks.filter(b =>
-        b.text.toUpperCase().replace(/\s+/g, '').includes(target)
-      );
-
+      // Primary match: exact only
+      const matchingBlocks = blocks.filter(b => exactMatch(b.text, target));
       const matchBoxes = matchingBlocks.map(b => b.frame);
 
-      triggerMatch({
-        uri,
-        matchBoxes,
-        imageWidth,
-        imageHeight,
-      });
-
+      triggerMatch({ uri, matchBoxes, imageWidth, imageHeight });
       return true;
     },
     [targetSku, triggerMatch],
@@ -104,5 +146,5 @@ export function useSkuScanner(targetSku: string) {
     setState(prev => ({ ...prev, isScanning: true, foundImage: null }));
   }, []);
 
-  return { state, processScanResult, startScanning, stopScanning, scanAgain };
+  return { state, processScanResult, updateFoundBoxes, startScanning, stopScanning, scanAgain };
 }

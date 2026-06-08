@@ -17,7 +17,7 @@ import { useSkuScanner } from './src/hooks/useSkuScanner';
 export default function App() {
   const [targetSku, setTargetSku] = useState('');
   const [captureVisible, setCaptureVisible] = useState(false);
-  const { state, processScanResult, startScanning, stopScanning, scanAgain } = useSkuScanner(targetSku);
+  const { state, processScanResult, updateFoundBoxes, startScanning, stopScanning, scanAgain } = useSkuScanner(targetSku);
 
   const handleToggleScan = useCallback(() => {
     Keyboard.dismiss();
@@ -57,7 +57,9 @@ export default function App() {
         <View style={styles.cameraContainer}>
           <CameraScanner
             isScanning={state.isScanning}
+            targetSku={targetSku}
             onScanResult={processScanResult}
+            onDeepScanComplete={updateFoundBoxes}
           />
         </View>
 

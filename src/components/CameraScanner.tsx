@@ -12,17 +12,19 @@ import {
   useCameraDevice,
   useCameraPermission,
 } from 'react-native-vision-camera';
-import { ScanResult } from '../hooks/useSkuScanner';
+import { BoundingBox, ScanResult, looseMatch } from '../hooks/useSkuScanner';
 
 interface Props {
   isScanning: boolean;
+  targetSku: string;
   onScanResult: (result: ScanResult) => boolean;
+  onDeepScanComplete: (boxes: BoundingBox[], uri: string, w: number, h: number) => void;
 }
 
-const SCAN_INTERVAL_MS = 350;
+const SCAN_INTERVAL_MS = 230;
 const ZOOM_LEVELS = [1, 2, 3, 5];
 
-export function CameraScanner({ isScanning, onScanResult }: Props) {
+export function CameraScanner({ isScanning, targetSku, onScanResult, onDeepScanComplete }: Props) {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
   const cameraRef = useRef<Camera>(null);
@@ -53,13 +55,30 @@ export function CameraScanner({ isScanning, onScanResult }: Props) {
       const fullText = result.blocks.map(b => b.text).join(' ');
 
       if (fullText.trim()) {
-        onScanResult({
+        const matched = onScanResult({
           text: fullText,
           uri,
           blocks,
           imageWidth:  snapshot.width  ?? 1080,
           imageHeight: snapshot.height ?? 1920,
         });
+
+        // Primary match found — do a dedicated deep scan 500ms later.
+        // Higher quality, loose matching to catch every instance in the frame.
+        if (matched && cameraRef.current) {
+          setTimeout(async () => {
+            try {
+              const hq = await cameraRef.current!.takeSnapshot({ quality: 85, skipMetadata: true });
+              const hqUri = hq.path.startsWith('file://') ? hq.path : `file://${hq.path}`;
+              const hqResult = await TextRecognition.recognize(hqUri);
+              const target = targetSku.trim().toUpperCase().replace(/\s+/g, '');
+              const looseBoxes = hqResult.blocks
+                .filter(b => looseMatch(b.text, target))
+                .map(b => b.frame);
+              onDeepScanComplete(looseBoxes, hqUri, hq.width ?? 1080, hq.height ?? 1920);
+            } catch { /* ignore */ }
+          }, 500);
+        }
       }
     } catch {
       // silently ignore transient errors
