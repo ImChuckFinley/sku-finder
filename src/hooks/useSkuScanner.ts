@@ -94,12 +94,15 @@ export function useSkuScanner(targetSku: string) {
       const existing = prev.foundImage.matchBoxes;
       const merged = [...existing];
       for (const nb of newBoxes) {
-        const overlaps = merged.some(eb => {
-          const xOverlap = nb.left < eb.left + eb.width  && nb.left + nb.width  > eb.left;
-          const yOverlap = nb.top  < eb.top  + eb.height && nb.top  + nb.height > eb.top;
-          return xOverlap && yOverlap;
+        const nbCX = nb.left + nb.width  / 2;
+        const nbCY = nb.top  + nb.height / 2;
+        const isDupe = merged.some(eb => {
+          const ebCX = eb.left + eb.width  / 2;
+          const ebCY = eb.top  + eb.height / 2;
+          const dist = Math.sqrt(Math.pow(nbCX - ebCX, 2) + Math.pow(nbCY - ebCY, 2));
+          return dist < 100; // within 100px = same sticker
         });
-        if (!overlaps) merged.push(nb);
+        if (!isDupe) merged.push(nb);
       }
       return {
         ...prev,
