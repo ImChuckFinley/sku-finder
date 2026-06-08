@@ -12,7 +12,7 @@ import {
   useCameraDevice,
   useCameraPermission,
 } from 'react-native-vision-camera';
-import { BoundingBox, ScanResult, looseMatch } from '../hooks/useSkuScanner';
+import { BoundingBox, ScanResult } from '../hooks/useSkuScanner';
 
 interface Props {
   isScanning: boolean;
@@ -63,21 +63,30 @@ export function CameraScanner({ isScanning, targetSku, onScanResult, onDeepScanC
           imageHeight: snapshot.height ?? 1920,
         });
 
-        // Primary match found — do a dedicated deep scan 500ms later.
-        // Higher quality, loose matching to catch every instance in the frame.
+        // Primary match found — take 4 rapid exact-match snapshots to catch
+        // every instance. Different frames capture different boxes as the
+        // camera/lighting shifts slightly. Union of exact matches = no false positives.
         if (matched && cameraRef.current) {
-          setTimeout(async () => {
-            try {
-              const hq = await cameraRef.current!.takeSnapshot({ quality: 85, skipMetadata: true });
-              const hqUri = hq.path.startsWith('file://') ? hq.path : `file://${hq.path}`;
-              const hqResult = await TextRecognition.recognize(hqUri);
-              const target = targetSku.trim().toUpperCase().replace(/\s+/g, '');
-              const looseBoxes = hqResult.blocks
-                .filter(b => looseMatch(b.text, target))
-                .map(b => b.frame);
-              onDeepScanComplete(looseBoxes, hqUri, hq.width ?? 1080, hq.height ?? 1920);
-            } catch { /* ignore */ }
-          }, 500);
+          const target = targetSku.trim().toUpperCase().replace(/\s+/g, '');
+          const DEEP_SHOTS = 4;
+          const DEEP_INTERVAL = 120; // ms between each shot
+
+          for (let i = 0; i < DEEP_SHOTS; i++) {
+            setTimeout(async () => {
+              if (!cameraRef.current) return;
+              try {
+                const snap = await cameraRef.current.takeSnapshot({ quality: 70, skipMetadata: true });
+                const snapUri = snap.path.startsWith('file://') ? snap.path : `file://${snap.path}`;
+                const result = await TextRecognition.recognize(snapUri);
+                const boxes = result.blocks
+                  .filter(b => b.text.toUpperCase().replace(/\s+/g, '').includes(target))
+                  .map(b => b.frame);
+                if (boxes.length) {
+                  onDeepScanComplete(boxes, snapUri, snap.width ?? 1080, snap.height ?? 1920);
+                }
+              } catch { /* ignore */ }
+            }, 300 + i * DEEP_INTERVAL); // start 300ms after freeze, then every 120ms
+          }
         }
       }
     } catch {
