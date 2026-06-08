@@ -73,20 +73,12 @@ export function useSkuScanner(targetSku: string) {
       const normalizedText = text.toUpperCase().replace(/\s+/g, '');
       if (!normalizedText.includes(target)) return false;
 
-      // Search lines first (finer grained) — each line covers one label
-      const matchingLines = blocks.flatMap(b =>
-        b.lines.filter(l => l.text.toUpperCase().replace(/\s+/g, '').includes(target))
-      );
-
-      // Fall back to block level if no line matches found
+      // Block-level matching — blocks aggregate full label text reliably
       const matchingBlocks = blocks.filter(b =>
         b.text.toUpperCase().replace(/\s+/g, '').includes(target)
       );
 
-      // Prefer line-level boxes (tighter fit), use block boxes as fallback
-      const matchBoxes = matchingLines.length > 0
-        ? matchingLines.map(l => l.frame)
-        : matchingBlocks.map(b => b.frame);
+      const matchBoxes = matchingBlocks.map(b => b.frame);
 
       triggerMatch({
         uri,
