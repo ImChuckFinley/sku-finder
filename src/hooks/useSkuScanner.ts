@@ -10,7 +10,7 @@ export interface BoundingBox {
 
 export interface FoundImage {
   uri: string;
-  matchBox: BoundingBox | null;
+  matchBoxes: BoundingBox[];   // every instance of the SKU visible in the frame
   imageWidth: number;
   imageHeight: number;
 }
@@ -72,14 +72,14 @@ export function useSkuScanner(targetSku: string) {
       const normalizedText = text.toUpperCase().replace(/\s+/g, '');
       if (!normalizedText.includes(target)) return false;
 
-      // Find the specific block that contains the match for highlighting
-      const matchingBlock = blocks.find(b =>
+      // Find ALL blocks containing the SKU — highlight every instance in the frame
+      const matchingBlocks = blocks.filter(b =>
         b.text.toUpperCase().replace(/\s+/g, '').includes(target)
       );
 
       triggerMatch({
         uri,
-        matchBox: matchingBlock?.frame ?? null,
+        matchBoxes: matchingBlocks.map(b => b.frame),
         imageWidth,
         imageHeight,
       });

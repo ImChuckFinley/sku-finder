@@ -32,9 +32,10 @@
     },
     "plugins": [
       [
-        "expo-camera",
+        "react-native-vision-camera",
         {
-          "cameraPermission": "Allow SKU Finder to access your camera to scan product labels."
+          "cameraPermissionText": "Allow SKU Finder to access your camera to scan product labels.",
+          "enableMicrophonePermission": false
         }
       ]
     ],

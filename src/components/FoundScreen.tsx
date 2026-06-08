@@ -39,14 +39,13 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
     setContainerSize({ width, height });
   };
 
-  // Scale bounding box from photo coords → display coords
-  const highlightBox = useMemo(() => {
-    if (!foundImage.matchBox || !containerSize) return null;
+  // Scale all bounding boxes from photo coords → display coords
+  const highlightBoxes = useMemo(() => {
+    if (!containerSize || foundImage.matchBoxes.length === 0) return [];
 
-    const { matchBox: b, imageWidth, imageHeight } = foundImage;
+    const { matchBoxes, imageWidth, imageHeight } = foundImage;
     const { width: cW, height: cH } = containerSize;
 
-    // resizeMode="contain": fit image inside container preserving aspect ratio
     const imgAspect = imageWidth / imageHeight;
     const cntAspect = cW / cH;
 
@@ -67,12 +66,12 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
     const sX = renderedW / imageWidth;
     const sY = renderedH / imageHeight;
 
-    return {
+    return matchBoxes.map(b => ({
       top:    offsetY + b.top    * sY - 10,
       left:   offsetX + b.left   * sX - 10,
       width:  b.width  * sX + 20,
       height: b.height * sY + 20,
-    };
+    }));
   }, [foundImage, containerSize]);
 
   return (
@@ -85,22 +84,23 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
           resizeMode="contain"
         />
 
-        {/* Yellow highlight around matched text */}
-        {highlightBox && (
+        {/* Yellow highlight around every instance of the SKU */}
+        {highlightBoxes.map((box, i) => (
           <Animated.View
+            key={i}
             pointerEvents="none"
             style={[
               styles.highlight,
               {
-                top:    highlightBox.top,
-                left:   highlightBox.left,
-                width:  highlightBox.width,
-                height: highlightBox.height,
+                top:    box.top,
+                left:   box.left,
+                width:  box.width,
+                height: box.height,
                 transform: [{ scale: pulseAnim }],
               },
             ]}
           />
-        )}
+        ))}
       </View>
 
       {/* Green border over everything */}
@@ -109,8 +109,17 @@ export function FoundScreen({ foundImage, targetSku, onScanAgain }: Props) {
       {/* FOUND badge */}
       <View style={styles.badge}>
         <Text style={styles.badgeCheck}>✓</Text>
-        <Text style={styles.badgeFound}>FOUND</Text>
+        <Text style={styles.badgeFound}>
+          {foundImage.matchBoxes.length > 1
+            ? `FOUND  ×${foundImage.matchBoxes.length}`
+            : 'FOUND'}
+        </Text>
         <Text style={styles.badgeSku}>{targetSku}</Text>
+        {foundImage.matchBoxes.length > 1 && (
+          <Text style={styles.badgeHint}>
+            {foundImage.matchBoxes.length} boxes visible in frame
+          </Text>
+        )}
       </View>
 
       {/* Scan Again */}
@@ -179,6 +188,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
     letterSpacing: 4,
     marginTop: 4,
+  },
+  badgeHint: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    marginTop: 6,
+    letterSpacing: 0.5,
   },
   button: {
     position: 'absolute',
