@@ -45,7 +45,11 @@ export function CameraScanner({ isScanning, onScanResult }: Props) {
         : `file://${snapshot.path}`;
 
       const result = await TextRecognition.recognize(uri);
-      const blocks = result.blocks.map(b => ({ text: b.text, frame: b.frame }));
+      const blocks = result.blocks.map(b => ({
+        text: b.text,
+        frame: b.frame,
+        lines: b.lines?.map(l => ({ text: l.text, frame: l.frame })) ?? [],
+      }));
       const fullText = result.blocks.map(b => b.text).join(' ');
 
       if (fullText.trim()) {

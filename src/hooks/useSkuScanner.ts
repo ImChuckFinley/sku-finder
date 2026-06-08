@@ -21,6 +21,7 @@ export interface ScanResult {
   blocks: Array<{
     text: string;
     frame: BoundingBox;
+    lines: Array<{ text: string; frame: BoundingBox }>;
   }>;
   imageWidth: number;
   imageHeight: number;
@@ -72,14 +73,24 @@ export function useSkuScanner(targetSku: string) {
       const normalizedText = text.toUpperCase().replace(/\s+/g, '');
       if (!normalizedText.includes(target)) return false;
 
-      // Find ALL blocks containing the SKU — highlight every instance in the frame
+      // Search lines first (finer grained) — each line covers one label
+      const matchingLines = blocks.flatMap(b =>
+        b.lines.filter(l => l.text.toUpperCase().replace(/\s+/g, '').includes(target))
+      );
+
+      // Fall back to block level if no line matches found
       const matchingBlocks = blocks.filter(b =>
         b.text.toUpperCase().replace(/\s+/g, '').includes(target)
       );
 
+      // Prefer line-level boxes (tighter fit), use block boxes as fallback
+      const matchBoxes = matchingLines.length > 0
+        ? matchingLines.map(l => l.frame)
+        : matchingBlocks.map(b => b.frame);
+
       triggerMatch({
         uri,
-        matchBoxes: matchingBlocks.map(b => b.frame),
+        matchBoxes,
         imageWidth,
         imageHeight,
       });
