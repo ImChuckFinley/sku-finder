@@ -9,12 +9,14 @@ import {
   View,
 } from 'react-native';
 import { CameraScanner } from './src/components/CameraScanner';
+import { CaptureMode } from './src/components/CaptureMode';
 import { FoundScreen } from './src/components/FoundScreen';
 import { SKUInput } from './src/components/SKUInput';
 import { useSkuScanner } from './src/hooks/useSkuScanner';
 
 export default function App() {
   const [targetSku, setTargetSku] = useState('');
+  const [captureVisible, setCaptureVisible] = useState(false);
   const { state, processScanResult, startScanning, stopScanning, scanAgain } = useSkuScanner(targetSku);
 
   const handleToggleScan = useCallback(() => {
@@ -31,6 +33,13 @@ export default function App() {
     stopScanning();
   }, [stopScanning]);
 
+  // Called when CaptureMode finds a value — fills the input and closes
+  const handleCapture = useCallback((value: string) => {
+    setTargetSku(value);
+    setCaptureVisible(false);
+    stopScanning();
+  }, [stopScanning]);
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.container}>
@@ -41,6 +50,7 @@ export default function App() {
           onChange={handleSkuChange}
           isScanning={state.isScanning}
           onToggleScan={handleToggleScan}
+          onCaptureSku={() => setCaptureVisible(true)}
           scanCount={state.scanCount}
         />
 
@@ -51,7 +61,7 @@ export default function App() {
           />
         </View>
 
-        {/* Full-screen modal so FoundScreen covers EVERYTHING including the input bar */}
+        {/* Freeze-frame found screen */}
         <Modal
           visible={state.foundImage !== null}
           animationType="fade"
@@ -66,6 +76,13 @@ export default function App() {
             />
           )}
         </Modal>
+
+        {/* Scan-to-fill capture mode */}
+        <CaptureMode
+          visible={captureVisible}
+          onCapture={handleCapture}
+          onClose={() => setCaptureVisible(false)}
+        />
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );

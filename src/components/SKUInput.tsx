@@ -12,24 +12,37 @@ interface Props {
   onChange: (text: string) => void;
   isScanning: boolean;
   onToggleScan: () => void;
+  onCaptureSku: () => void;
   scanCount: number;
 }
 
-export function SKUInput({ value, onChange, isScanning, onToggleScan, scanCount }: Props) {
+export function SKUInput({ value, onChange, isScanning, onToggleScan, onCaptureSku, scanCount }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.label}>Target SKU</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChange}
-        placeholder="e.g. 123456"
-        placeholderTextColor="#555"
-        autoCapitalize="characters"
-        autoCorrect={false}
-        returnKeyType="done"
-        clearButtonMode="while-editing"
-      />
+
+      {/* Input row with scan-to-fill button */}
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          value={value}
+          onChangeText={onChange}
+          placeholder="e.g. 123456"
+          placeholderTextColor="#555"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          returnKeyType="done"
+          clearButtonMode="while-editing"
+        />
+        <TouchableOpacity
+          style={styles.captureButton}
+          onPress={onCaptureSku}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.captureIcon}>📷</Text>
+        </TouchableOpacity>
+      </View>
+
       <TouchableOpacity
         style={[styles.button, isScanning && styles.buttonActive]}
         onPress={onToggleScan}
@@ -40,6 +53,7 @@ export function SKUInput({ value, onChange, isScanning, onToggleScan, scanCount 
           {isScanning ? 'STOP SCANNING' : 'START SCANNING'}
         </Text>
       </TouchableOpacity>
+
       {isScanning && (
         <Text style={styles.scanCount}>Frames scanned: {scanCount}</Text>
       )}
@@ -62,7 +76,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 6,
   },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
   input: {
+    flex: 1,
     backgroundColor: '#1e1e2e',
     color: '#fff',
     fontSize: 22,
@@ -73,7 +93,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
     letterSpacing: 2,
-    marginBottom: 12,
+  },
+  captureButton: {
+    width: 54,
+    backgroundColor: '#1e1e2e',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD600',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureIcon: {
+    fontSize: 24,
   },
   button: {
     backgroundColor: '#2a2a3e',
